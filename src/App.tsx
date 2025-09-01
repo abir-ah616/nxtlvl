@@ -22,7 +22,7 @@ function App() {
       <Navigation activeTab={activeTab} onTabChange={handleTabChange} />
       
       <main className="relative z-10">
-        {activeTab === 'home' && <HomePage onContactClick={() => handleTabChange('contact')} />}
+        {activeTab === 'home' && <HomePage onContactClick={() => handleTabChange('contact')} onCalculatorClick={() => handleTabChange('calculator')} />}
         {activeTab === 'calculator' && <PriceCalculator />}
         {activeTab === 'pricelist' && <DataTable />}
         {activeTab === 'contact' && <ContactPage />}

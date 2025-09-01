@@ -1,39 +1,30 @@
-export interface ExchangeRateResponse {
-  date: string;
-  base_code: string;
-  rates: {
-    [key: string]: number;
-  };
+interface CurrencyRateResponse {
+  rate: number;
+  cached: boolean;
+  updated_at: string;
+  fallback?: boolean;
 }
 
-let cachedRate: number | null = null;
-let lastFetchTime: number = 0;
-const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
-
 export const getUSDToBDTRate = async (): Promise<number> => {
-  const now = Date.now();
-  
-  // Return cached rate if it's still valid
-  if (cachedRate && (now - lastFetchTime) < CACHE_DURATION) {
-    return cachedRate;
-  }
-
   try {
-    const response = await fetch('https://api.exchangerate-api.com/v4/latest/USD');
+    const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/currency-rates`;
+    const response = await fetch(apiUrl, {
+      headers: {
+        'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+        'Content-Type': 'application/json',
+      },
+    });
     
     if (!response.ok) {
       throw new Error('Failed to fetch exchange rate');
     }
     
-    const data: ExchangeRateResponse = await response.json();
-    const rate = data.rates.BDT;
+    const data: CurrencyRateResponse = await response.json();
+    const rate = data.rate;
     
     if (!rate) {
       throw new Error('BDT rate not found in response');
     }
-    
-    cachedRate = rate;
-    lastFetchTime = now;
     
     return rate;
   } catch (error) {
@@ -46,4 +37,4 @@ export const getUSDToBDTRate = async (): Promise<number> => {
 export const convertUSDToBDT = async (usdAmount: number): Promise<number> => {
   const rate = await getUSDToBDTRate();
   return usdAmount * rate;
-};
+}

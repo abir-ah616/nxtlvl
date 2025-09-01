@@ -2,15 +2,34 @@ import React, { useState } from 'react';
 import { Search, Zap, Clock, DollarSign } from 'lucide-react';
 import { parseLevelData } from '../utils/csvParser';
 import { formatTime } from '../utils/calculator';
-import { convertUSDToBDT } from '../utils/currencyConverter';
+import { convertUSDToBDT, getUSDToBDTRate } from '../utils/currencyConverter';
 
 export const DataTable: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [showBDT, setShowBDT] = useState(false);
   const [bdtRates, setBdtRates] = useState<{ [key: string]: number }>({});
   const [isConverting, setIsConverting] = useState(false);
+  const [currentRate, setCurrentRate] = useState<number | null>(null);
+  const [isLoadingRate, setIsLoadingRate] = useState(true);
 
   const levelData = parseLevelData();
+
+  // Load current exchange rate on component mount
+  React.useEffect(() => {
+    const loadCurrentRate = async () => {
+      try {
+        const rate = await getUSDToBDTRate();
+        setCurrentRate(rate);
+      } catch (error) {
+        console.error('Error loading current rate:', error);
+        setCurrentRate(120); // Fallback rate
+      } finally {
+        setIsLoadingRate(false);
+      }
+    };
+
+    loadCurrentRate();
+  }, []);
 
   const filteredData = levelData.filter(item =>
     item.fromLevel.toString().includes(searchTerm) ||
@@ -18,22 +37,21 @@ export const DataTable: React.FC = () => {
   );
 
   const handleConvertToBDT = async () => {
+    if (!currentRate) return;
+    
     setIsConverting(true);
-    try {
-      const rates: { [key: string]: number } = {};
-      
-      for (const item of levelData) {
-        const bdtAmount = await convertUSDToBDT(item.costUSD);
-        rates[`${item.fromLevel}-${item.toLevel}`] = bdtAmount;
-      }
-      
-      setBdtRates(rates);
-      setShowBDT(true);
-    } catch (error) {
-      console.error('Error converting to BDT:', error);
-    } finally {
-      setIsConverting(false);
+    
+    // Use the already loaded current rate to convert all prices instantly
+    const rates: { [key: string]: number } = {};
+    
+    for (const item of levelData) {
+      const bdtAmount = item.costUSD * currentRate;
+      rates[`${item.fromLevel}-${item.toLevel}`] = bdtAmount;
     }
+    
+    setBdtRates(rates);
+    setShowBDT(true);
+    setIsConverting(false);
   };
 
   return (
@@ -51,7 +69,7 @@ export const DataTable: React.FC = () => {
 
         {/* Controls */}
         <div className="bg-gradient-to-br from-cyan-500/10 to-blue-600/10 backdrop-blur-xl rounded-2xl md:rounded-3xl p-4 md:p-6 mb-6 md:mb-8 border border-cyan-400/20 shadow-2xl shadow-cyan-500/20">
-          <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
+          <div className="flex flex-col lg:flex-row justify-between items-center gap-4">
             <div className="relative flex-1 max-w-md w-full">
               <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
               <input
@@ -63,13 +81,26 @@ export const DataTable: React.FC = () => {
               />
             </div>
             
-            <button
-              onClick={handleConvertToBDT}
-              disabled={isConverting}
-              className="px-4 md:px-6 py-2 md:py-3 bg-gradient-to-r from-green-500/20 to-emerald-600/20 backdrop-blur-md border border-green-400/30 text-white font-medium rounded-xl hover:from-green-500/30 hover:to-emerald-600/30 hover:border-green-400/50 transform hover:scale-105 transition-all duration-300 shadow-lg shadow-green-500/25 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
-            >
-              {isConverting ? 'Converting...' : 'Convert to BDT'}
-            </button>
+            <div className="flex flex-col sm:flex-row items-center gap-4">
+              {/* Current Rate Display */}
+              <div className="bg-gradient-to-r from-yellow-500/20 to-orange-600/20 backdrop-blur-md border border-yellow-400/30 rounded-xl px-4 py-2">
+                <div className="text-center">
+                  <p className="text-yellow-400 text-xs uppercase tracking-wider">Current Rate</p>
+                  <p className="text-white font-bold">
+                    {isLoadingRate ? 'Loading...' : `1 USD = ${currentRate?.toFixed(2)} BDT`}
+                  </p>
+                </div>
+              </div>
+
+              {/* Convert Button */}
+              <button
+                onClick={handleConvertToBDT}
+                disabled={isConverting}
+                className="px-4 md:px-6 py-2 md:py-3 bg-gradient-to-r from-green-500/20 to-emerald-600/20 backdrop-blur-md border border-green-400/30 text-white font-medium rounded-xl hover:from-green-500/30 hover:to-emerald-600/30 hover:border-green-400/50 transform hover:scale-105 transition-all duration-300 shadow-lg shadow-green-500/25 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+              >
+                {isConverting ? 'Converting...' : 'Convert to BDT'}
+              </button>
+            </div>
           </div>
         </div>
 
@@ -141,7 +172,7 @@ export const DataTable: React.FC = () => {
                         </span>
                         {showBDT && bdtRates[`${item.fromLevel}-${item.toLevel}`] && (
                           <span className="text-green-300 font-medium text-xs md:text-sm">
-                            ৳{bdtRates[`${item.fromLevel}-${item.toLevel}`].toFixed(0)}
+                            {bdtRates[`${item.fromLevel}-${item.toLevel}`].toFixed(0)} BDT
                           </span>
                         )}
                       </div>

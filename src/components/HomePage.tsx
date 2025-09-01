@@ -1,14 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { Zap, Clock, DollarSign, MessageCircle, Calculator, Shield, Users, Headphones } from 'lucide-react';
 import { calculateLevelProgression, formatTime } from '../utils/calculator';
-import { convertUSDToBDT } from '../utils/currencyConverter';
+import { getUSDToBDTRate } from '../utils/currencyConverter';
 import { CalculationResult } from '../types';
 
 interface HomePageProps {
   onContactClick: () => void;
+  onCalculatorClick: () => void;
+  onCalculatorClick: () => void;
 }
 
-export const HomePage: React.FC<HomePageProps> = ({ onContactClick }) => {
+export const HomePage: React.FC<HomePageProps> = ({ onContactClick, onCalculatorClick }) => {
   const [currentLevel, setCurrentLevel] = useState<number | ''>('');
   const [desiredLevel, setDesiredLevel] = useState<number | ''>('');
   const [result, setResult] = useState<CalculationResult | null>(null);
@@ -16,10 +18,27 @@ export const HomePage: React.FC<HomePageProps> = ({ onContactClick }) => {
   const [isCalculating, setIsCalculating] = useState(false);
   const [bdtCost, setBdtCost] = useState<number>(0);
   const [bdtTotalCost, setBdtTotalCost] = useState<number>(0);
-  const [isConvertingResult, setIsConvertingResult] = useState(false);
-  const [isConvertingTotal, setIsConvertingTotal] = useState(false);
   const [showResultBDT, setShowResultBDT] = useState(false);
   const [showTotalBDT, setShowTotalBDT] = useState(false);
+  const [currentRate, setCurrentRate] = useState<number | null>(null);
+  const [isLoadingRate, setIsLoadingRate] = useState(true);
+
+  // Load current exchange rate on component mount
+  useEffect(() => {
+    const loadCurrentRate = async () => {
+      try {
+        const rate = await getUSDToBDTRate();
+        setCurrentRate(rate);
+      } catch (error) {
+        console.error('Error loading current rate:', error);
+        setCurrentRate(120); // Fallback rate
+      } finally {
+        setIsLoadingRate(false);
+      }
+    };
+
+    loadCurrentRate();
+  }, []);
 
   useEffect(() => {
     if (currentLevel && desiredLevel && typeof currentLevel === 'number' && typeof desiredLevel === 'number' && currentLevel < desiredLevel) {
@@ -46,42 +65,22 @@ export const HomePage: React.FC<HomePageProps> = ({ onContactClick }) => {
     }
   }, [currentLevel, desiredLevel]);
 
-  const handleConvertResultToBDT = async () => {
-    if (!result) return;
+  const handleConvertResultToBDT = () => {
+    if (!result || !currentRate) return;
     
-    setIsConvertingResult(true);
-    try {
-      const bdtAmount = await convertUSDToBDT(result.totalCost);
-      setBdtCost(bdtAmount);
-      setShowResultBDT(true);
-    } catch (error) {
-      console.error('Error converting to BDT:', error);
-    } finally {
-      setIsConvertingResult(false);
-    }
+    const bdtAmount = result.totalCost * currentRate;
+    setBdtCost(bdtAmount);
+    setShowResultBDT(true);
   };
 
-  const handleConvertTotalToBDT = async () => {
-    if (!totalToMax) return;
+  const handleConvertTotalToBDT = () => {
+    if (!totalToMax || !currentRate) return;
     
-    setIsConvertingTotal(true);
-    try {
-      const bdtTotalAmount = await convertUSDToBDT(totalToMax.totalCost);
-      setBdtTotalCost(bdtTotalAmount);
-      setShowTotalBDT(true);
-    } catch (error) {
-      console.error('Error converting to BDT:', error);
-    } finally {
-      setIsConvertingTotal(false);
-    }
+    const bdtTotalAmount = totalToMax.totalCost * currentRate;
+    setBdtTotalCost(bdtTotalAmount);
+    setShowTotalBDT(true);
   };
 
-  const scrollToCalculator = () => {
-    const calculatorSection = document.getElementById('calculator-section');
-    if (calculatorSection) {
-      calculatorSection.scrollIntoView({ behavior: 'smooth' });
-    }
-  };
 
   return (
     <div className="min-h-screen pt-20 md:pt-24 pb-12">
@@ -97,7 +96,7 @@ export const HomePage: React.FC<HomePageProps> = ({ onContactClick }) => {
           
           <div className="flex flex-col sm:flex-row gap-4 justify-center items-center animate-slideUp px-4" style={{ animationDelay: '0.2s' }}>
             <button
-              onClick={scrollToCalculator}
+              onClick={onCalculatorClick}
               className="w-full sm:w-auto px-6 md:px-8 py-3 md:py-4 bg-gradient-to-r from-cyan-500/20 to-blue-600/20 backdrop-blur-md border border-cyan-400/30 text-white font-bold rounded-xl hover:from-cyan-500/30 hover:to-blue-600/30 hover:border-cyan-400/50 transform hover:scale-105 transition-all duration-300 shadow-lg shadow-cyan-500/25 flex items-center justify-center space-x-2"
             >
               <Calculator className="w-5 h-5" />
@@ -204,7 +203,7 @@ export const HomePage: React.FC<HomePageProps> = ({ onContactClick }) => {
                       <div className="flex flex-col">
                         <p className="text-lg md:text-2xl font-bold text-white">${result.totalCost.toFixed(2)}</p>
                         {showResultBDT && (
-                          <p className="text-sm md:text-base font-medium text-green-400">৳{bdtCost.toFixed(0)}</p>
+                          <p className="text-sm md:text-base font-medium text-green-400">{bdtCost.toFixed(0)} BDT</p>
                         )}
                       </div>
                     </div>
@@ -228,10 +227,10 @@ export const HomePage: React.FC<HomePageProps> = ({ onContactClick }) => {
               <div className="flex justify-center">
                 <button
                   onClick={handleConvertResultToBDT}
-                  disabled={isConvertingResult}
+                  disabled={!currentRate}
                   className="px-4 md:px-6 py-2 md:py-3 bg-gradient-to-r from-green-500/20 to-emerald-600/20 backdrop-blur-md border border-green-400/30 text-white font-medium rounded-xl hover:from-green-500/30 hover:to-emerald-600/30 hover:border-green-400/50 transform hover:scale-105 transition-all duration-300 shadow-lg shadow-green-500/25 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {isConvertingResult ? 'Converting...' : 'Convert to BDT'}
+                  {!currentRate ? 'Loading rate...' : 'Convert to BDT'}
                 </button>
               </div>
 
@@ -285,7 +284,7 @@ export const HomePage: React.FC<HomePageProps> = ({ onContactClick }) => {
                       <div className="flex flex-col">
                         <p className="text-lg md:text-xl font-bold text-white">${totalToMax.totalCost.toFixed(2)}</p>
                         {showTotalBDT && (
-                          <p className="text-sm md:text-base font-medium text-yellow-400">৳{bdtTotalCost.toFixed(0)}</p>
+                          <p className="text-sm md:text-base font-medium text-yellow-400">{bdtTotalCost.toFixed(0)} BDT</p>
                         )}
                       </div>
                     </div>
@@ -309,10 +308,10 @@ export const HomePage: React.FC<HomePageProps> = ({ onContactClick }) => {
               <div className="flex justify-center mt-4 md:mt-6">
                 <button
                   onClick={handleConvertTotalToBDT}
-                  disabled={isConvertingTotal}
+                  disabled={!currentRate}
                   className="px-4 md:px-6 py-2 md:py-3 bg-gradient-to-r from-yellow-500/20 to-orange-600/20 backdrop-blur-md border border-yellow-400/30 text-white font-medium rounded-xl hover:from-yellow-500/30 hover:to-orange-600/30 hover:border-yellow-400/50 transform hover:scale-105 transition-all duration-300 shadow-lg shadow-yellow-500/25 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {isConvertingTotal ? 'Converting...' : 'Convert to BDT'}
+                  {!currentRate ? 'Loading rate...' : 'Convert to BDT'}
                 </button>
               </div>
             </div>
